@@ -206,11 +206,17 @@ class VLATrainer(TrainerUtils):
 
     def _save_checkpoint(self):
         """Save current training state."""
+        # get_state_dict() is a COLLECTIVE under DeepSpeed ZeRO-3: the parameters are
+        # sharded across ranks, so every rank must call it to take part in the gather.
+        # Calling it only on the main process (as this used to) deadlocks ZeRO-3 --
+        # rank 0 waits forever for peers that never join, at 100% GPU with no progress
+        # and no checkpoint. Harmless under ZeRO-2, where nothing needs gathering.
+        state_dict = self.accelerator.get_state_dict(self.model)
+
         if self.accelerator.is_main_process:
             save_format = getattr(self.config.trainer, "save_format", "pt")
             checkpoint_path = os.path.join(self.checkpoint_dir, f"steps_{self.completed_steps}")
 
-            state_dict = self.accelerator.get_state_dict(self.model)
             if save_format == "safetensors":
                 from safetensors.torch import save_file
 
@@ -353,11 +359,14 @@ class VLATrainer(TrainerUtils):
 
     def _finalize_training(self):
         """Training end processing."""
+        # Collective under ZeRO-3 -- see the note in _save_checkpoint(). Must run on
+        # every rank, or the final save deadlocks after the full training run.
+        state_dict = self.accelerator.get_state_dict(self.model)
+
         if self.accelerator.is_main_process:
             save_format = getattr(self.config.trainer, "save_format", "pt")
             final_checkpoint = os.path.join(self.config.output_dir, "final_model")
             os.makedirs(final_checkpoint, exist_ok=True)
-            state_dict = self.accelerator.get_state_dict(self.model)
             if save_format == "safetensors":
                 from safetensors.torch import save_file
 

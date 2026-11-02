@@ -42,6 +42,22 @@ DATASET_NAMED_MIXTURES = {
         ("sim_pick_place", 1.0, "demo_sim_franka_delta_joints"),
     ],
 
+    # Unitree G1 whole-body (GR00T-Sonic) data from the soma pipeline. The "." dataset
+    # name means data_root_dir IS the dataset dir itself, so soma can point
+    # --datasets.vla_data.data_root_dir straight at any prepared dataset without editing
+    # this registry per-dataset.
+    "sonic_g1": [
+        (".", 1.0, "unitree_g1_sonic"),
+    ],
+    # Same "." convention for the other two controllers: the mixture only selects which
+    # data config reads the dataset soma points at.
+    "heft_g1": [
+        (".", 1.0, "unitree_g1_heft"),
+    ],
+    "amo_g1": [
+        (".", 1.0, "unitree_g1_amo"),
+    ],
+
     "custom_dataset": [
         ("custom_dataset_name", 1.0, "custom_robot_config"),
     ],

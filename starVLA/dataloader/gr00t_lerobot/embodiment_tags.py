@@ -72,4 +72,12 @@ ROBOT_TYPE_TO_EMBODIMENT_TAG = {
     "demo_sim_franka_delta_joints": EmbodimentTag.FRANKA,
     "custom_robot_config": EmbodimentTag.NEW_EMBODIMENT,
     "fourier_gr1_arms_waist": EmbodimentTag.GR1,
+    # Unitree G1 whole-body (GR00T-Sonic) soma data: finetune on the NEW_EMBODIMENT
+    # projector slot (31) since it is a new embodiment not in the pretrained set.
+    "unitree_g1_sonic": EmbodimentTag.NEW_EMBODIMENT,
+    # The other two whole-body controllers soma collects with. Each is a different action
+    # space on the same robot, and none of them are in the pretrained set, so they all
+    # finetune on the NEW_EMBODIMENT projector slot.
+    "unitree_g1_heft": EmbodimentTag.NEW_EMBODIMENT,
+    "unitree_g1_amo": EmbodimentTag.NEW_EMBODIMENT,
 }

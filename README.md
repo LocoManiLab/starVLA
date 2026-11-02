@@ -1,3 +1,28 @@
+## LocoManiLab modifications
+
+This repository is a modified fork of [starVLA/starVLA](https://github.com/starVLA/starVLA), based on upstream commit [`3994acd`](https://github.com/starVLA/starVLA/commit/3994acd4629333ad1724b826e67b9c20e9d68c1c). It was modified by Gamma Robotics for the [LocoManiLab](https://github.com/Gamma-Robot/LocoManiLab) humanoid loco-manipulation benchmark, which uses it as a git submodule. Everything below this section is the upstream README, unchanged.
+
+Summary of changes:
+
+- Register Unitree G1 whole-body embodiments (`unitree_g1_sonic`, `unitree_g1_heft`, `unitree_g1_amo`): data configs, embodiment tags and dataset mixtures (`sonic_g1`, `heft_g1`, `amo_g1`). The SONIC variant outputs a 78-D action (64-D motion token + 7 + 7 hand joints).
+- `deployment/model_server/run_starvla_server.py`: a policy server speaking the Isaac-GR00T ZMQ `get_action` protocol, so the LocoManiLab simulator/robot client can drive starVLA models.
+- `starVLA/training/train_starvla.py`: call `get_state_dict()` on every rank when saving, fixing a DeepSpeed ZeRO-3 deadlock.
+- `examples/Robocasa_tabletop/eval_files/batch_eval_args.sh`: remove a leftover merge-conflict block.
+
+Files modified or added relative to the upstream base commit:
+
+- `README.md` (modified: this section)
+- `deployment/model_server/run_starvla_server.py` (added)
+- `examples/Robocasa_tabletop/eval_files/batch_eval_args.sh` (modified)
+- `starVLA/dataloader/gr00t_lerobot/data_config.py` (modified)
+- `starVLA/dataloader/gr00t_lerobot/embodiment_tags.py` (modified)
+- `starVLA/dataloader/gr00t_lerobot/mixtures.py` (modified)
+- `starVLA/training/train_starvla.py` (modified)
+
+The upstream [LICENSE](LICENSE) (MIT, StarVLA Team) is retained unchanged and also applies to these modifications.
+
+---
+
 # StarVLA: A Lego-like Codebase for Vision-Language-Action Model Developing
 Collecting, integrating, and exploring cutting-edge technologies for generalist robots.
 

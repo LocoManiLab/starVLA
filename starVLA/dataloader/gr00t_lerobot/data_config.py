@@ -664,6 +664,194 @@ class FourierGr1ArmsWaistDataConfig:
 ###########################################################################################
 
 
+class UnitreeG1SonicDataConfig:
+    """Unitree G1 whole-body (GR00T-Sonic) collected data, as produced by the soma
+    pipeline (GR00T-WholeBodyControl collection -> soma prepare -> outputs_pre/).
+
+    Structurally identical to FourierGr1ArmsWaistDataConfig (ego-view camera + a
+    humanoid's joint state), extended to the full 43-D G1 proprioception and the
+    64-D SONIC motion-token action. Keys mirror the dataset's meta/modality.json:
+      state  = observation.state slices (left_leg/right_leg/waist/arms/hands)
+      action = action.motion_token (64-D learned SONIC latent; matches gr00t/fastwam)
+      video  = observation.images.ego_view
+      lang   = task_index -> annotation.human.task_description
+    """
+
+    video_keys = ["video.ego_view"]
+    state_keys = [
+        "state.left_leg",
+        "state.right_leg",
+        "state.waist",
+        "state.left_arm",
+        "state.left_hand",
+        "state.right_arm",
+        "state.right_hand",
+    ]
+    action_keys = ["action.motion_token", "action.left_hand_joints", "action.right_hand_joints"]  # 78-D: motion_token(64)+hands(7+7), deploy parity
+    language_keys = ["annotation.human.task_description"]
+    observation_indices = [0]
+    action_indices = list(range(16))
+
+    def modality_config(self):
+        video_modality = ModalityConfig(
+            delta_indices=self.observation_indices,
+            modality_keys=self.video_keys,
+        )
+        state_modality = ModalityConfig(
+            delta_indices=self.observation_indices,
+            modality_keys=self.state_keys,
+        )
+        action_modality = ModalityConfig(
+            delta_indices=self.action_indices,
+            modality_keys=self.action_keys,
+        )
+        language_modality = ModalityConfig(
+            delta_indices=self.observation_indices,
+            modality_keys=self.language_keys,
+        )
+        return {
+            "video": video_modality,
+            "state": state_modality,
+            "action": action_modality,
+            "language": language_modality,
+        }
+
+    def transform(self) -> ModalityTransform:
+        transforms = [
+            # state: joint angles -> sin/cos (as in FourierGr1ArmsWaistDataConfig)
+            StateActionToTensor(apply_to=self.state_keys),
+            StateActionSinCosTransform(apply_to=self.state_keys),
+            # action: motion_token is a learned latent -> min-max normalize from dataset stats
+            StateActionToTensor(apply_to=self.action_keys),
+            StateActionTransform(
+                apply_to=self.action_keys,
+                normalization_modes={key: "min_max" for key in self.action_keys},
+            ),
+        ]
+        return ComposedModalityTransform(transforms=transforms)
+
+
+###########################################################################################
+
+
+class UnitreeG1HeftDataConfig:
+    """Unitree G1 with the **heft** whole-body controller (soma collect --backend heft).
+
+    Same robot and camera as UnitreeG1SonicDataConfig, different action space: heft records
+    the tracking policy's own reference frame instead of a learned latent, and keeps hands
+    out of the proprio vector.
+      state  = observation.state slices  (left_leg 6 + right_leg 6 + waist 3 + arms 7+7 = 29)
+      action = action.ref_qpos slices (root pos 3 + root quat 4 + 29 joint targets)
+               + action.hands (Dex3 7+7)                                        -> 50-D
+    """
+
+    video_keys = ["video.ego_view"]
+    state_keys = [
+        "state.left_leg",
+        "state.right_leg",
+        "state.waist",
+        "state.left_arm",
+        "state.right_arm",
+    ]
+    action_keys = [
+        "action.ref_root_pos",
+        "action.ref_root_quat",
+        "action.ref_joint_pos",
+        "action.left_hand",
+        "action.right_hand",
+    ]
+    language_keys = ["annotation.human.task_description"]
+    observation_indices = [0]
+    action_indices = list(range(16))
+
+    def modality_config(self):
+        return {
+            "video": ModalityConfig(delta_indices=self.observation_indices,
+                                    modality_keys=self.video_keys),
+            "state": ModalityConfig(delta_indices=self.observation_indices,
+                                    modality_keys=self.state_keys),
+            "action": ModalityConfig(delta_indices=self.action_indices,
+                                     modality_keys=self.action_keys),
+            "language": ModalityConfig(delta_indices=self.observation_indices,
+                                       modality_keys=self.language_keys),
+        }
+
+    def transform(self) -> ModalityTransform:
+        transforms = [
+            StateActionToTensor(apply_to=self.state_keys),
+            StateActionSinCosTransform(apply_to=self.state_keys),
+            StateActionToTensor(apply_to=self.action_keys),
+            StateActionTransform(
+                apply_to=self.action_keys,
+                normalization_modes={key: "min_max" for key in self.action_keys},
+            ),
+        ]
+        return ComposedModalityTransform(transforms=transforms)
+
+
+class UnitreeG1AmoDataConfig:
+    """Unitree G1 with the **amo** whole-body controller (soma collect --backend amo).
+
+    The action is the teleoperator's command stream, not a tracking target:
+      state  = states slices (left_hand 7 + right_hand 7 + left_arm 7 + right_arm 7
+               + rpy 3 + height 1 = 32)
+      action = the same 32 + torso_vx + torso_vy + torso_vyaw + target_yaw       -> 36-D
+
+    Note the sin/cos state encoding is applied ONLY to the joint groups: rpy is already an
+    angle triple in a fixed frame and height is a length in metres — wrapping either onto a
+    circle would be meaningless.
+    """
+
+    video_keys = ["video.ego_view"]
+    joint_state_keys = [
+        "state.left_hand",
+        "state.right_hand",
+        "state.left_arm",
+        "state.right_arm",
+    ]
+    pose_state_keys = ["state.rpy", "state.height"]
+    state_keys = joint_state_keys + pose_state_keys
+    action_keys = [
+        "action.left_hand",
+        "action.right_hand",
+        "action.left_arm",
+        "action.right_arm",
+        "action.rpy",
+        "action.height",
+        "action.torso_vx",
+        "action.torso_vy",
+        "action.torso_vyaw",
+        "action.target_yaw",
+    ]
+    language_keys = ["annotation.human.task_description"]
+    observation_indices = [0]
+    action_indices = list(range(16))
+
+    def modality_config(self):
+        return {
+            "video": ModalityConfig(delta_indices=self.observation_indices,
+                                    modality_keys=self.video_keys),
+            "state": ModalityConfig(delta_indices=self.observation_indices,
+                                    modality_keys=self.state_keys),
+            "action": ModalityConfig(delta_indices=self.action_indices,
+                                     modality_keys=self.action_keys),
+            "language": ModalityConfig(delta_indices=self.observation_indices,
+                                       modality_keys=self.language_keys),
+        }
+
+    def transform(self) -> ModalityTransform:
+        transforms = [
+            StateActionToTensor(apply_to=self.state_keys),
+            StateActionSinCosTransform(apply_to=self.joint_state_keys),
+            StateActionToTensor(apply_to=self.action_keys),
+            StateActionTransform(
+                apply_to=self.action_keys,
+                normalization_modes={key: "min_max" for key in self.action_keys},
+            ),
+        ]
+        return ComposedModalityTransform(transforms=transforms)
+
+
 ###########################################################################################
 
 class SO101Config:
@@ -994,7 +1182,10 @@ ROBOT_TYPE_CONFIG_MAP = {
     "robotwin": AgilexDataConfig(),
     "robotwin50": AgilexData50Config(),
     "fourier_gr1_arms_waist": FourierGr1ArmsWaistDataConfig(),
-    
+    "unitree_g1_sonic": UnitreeG1SonicDataConfig(),
+    "unitree_g1_heft": UnitreeG1HeftDataConfig(),
+    "unitree_g1_amo": UnitreeG1AmoDataConfig(),
+
     "custom_robot_config": SingleFrankaRobotiqDeltaEefDataConfig(),
 }
 
